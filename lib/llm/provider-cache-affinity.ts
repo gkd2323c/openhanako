@@ -14,7 +14,15 @@ export function applyProviderCacheAffinityToPayload(payload: any, affinityKey: a
 
   let next = payload;
   for (const field of ["prompt_cache_key", "promptCacheKey"]) {
-    if (!Object.prototype.hasOwnProperty.call(payload, field)) continue;
+    // pi-ai's buildParams always emits these fields as placeholders whose value
+    // may be undefined when the transport did not actually enable prompt
+    // caching. Rewriting a placeholder would inject a non-standard field into
+    // strict OpenAI-compatible gateways (LiteLLM / one-api / new-api) that
+    // reject unknown fields with 400. Only rewrite when the transport left a
+    // real (non-empty) value behind, so undefined placeholders stay undefined
+    // and are dropped by JSON serialization.
+    const current = payload[field];
+    if (typeof current !== "string" || current.trim() === "") continue;
     if (next === payload) next = { ...payload };
     next[field] = normalized;
   }

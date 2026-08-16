@@ -83,6 +83,41 @@ describe("provider cache affinity", () => {
       .toBe(options);
   });
 
+  it("does not inject provider cache fields the transport left as undefined placeholders", () => {
+    // pi-ai's buildParams always emits prompt_cache_key / promptCacheKey as
+    // placeholder keys whose value is undefined when the transport did not
+    // enable prompt caching. Rewriting those placeholders would force a
+    // non-standard field onto strict OpenAI-compatible gateways (LiteLLM /
+    // one-api / new-api) that reject unknown fields with 400.
+    const payload = {
+      prompt_cache_key: undefined,
+      promptCacheKey: undefined,
+      messages: [],
+    };
+    const result = applyProviderCacheAffinityToPayload(payload, "pi-source");
+    expect(result).toBe(payload);
+    expect(payload).toMatchObject({
+      prompt_cache_key: undefined,
+      promptCacheKey: undefined,
+      messages: [],
+    });
+
+    const empty = {
+      prompt_cache_key: "",
+      messages: [],
+    };
+    expect(applyProviderCacheAffinityToPayload(empty, "pi-source")).toBe(empty);
+  });
+
+  it("still rewrites real non-empty provider cache keys", () => {
+    const payload = {
+      prompt_cache_key: "pi-child-session",
+      messages: [],
+    };
+    const result = applyProviderCacheAffinityToPayload(payload, "pi-source-lineage");
+    expect(result).toMatchObject({ prompt_cache_key: "pi-source-lineage" });
+  });
+
   it("clamps persisted keys to the provider-safe length and leaves unrelated payloads untouched", () => {
     const key = normalizeProviderCacheAffinityKey("x".repeat(80));
     expect(key).toHaveLength(64);
